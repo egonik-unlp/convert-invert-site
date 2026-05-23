@@ -50,6 +50,8 @@ up: env-check
 
 down:
 	$(COMPOSE) down
+full-down:
+	$(COMPOSE) down -v
 
 logs:
 	$(COMPOSE) logs -f
