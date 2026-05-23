@@ -1,0 +1,86 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required (see .env.example)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required (see .env.example)}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "${OTLP_GRPC_PORT:-4317}:4317"
+
+  api:
+    build:
+      context: ./convert-invert
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required (see .env.example)}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      SERVER_BIND: 0.0.0.0:3124
+      JAEGER_URL: http://jaeger:16686
+      OTLP_ENDPOINT: http://jaeger:4317
+      DOWNLOAD_PATH: /downloads
+      API_KEY: ${API_KEY:?API_KEY is required — generate with `openssl rand -hex 32`}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      USER_NAME: ${USER_NAME:?USER_NAME is required}
+      USER_PASSWORD: ${USER_PASSWORD:?USER_PASSWORD is required}
+      LISTEN_PORT: ${LISTEN_PORT:-41000}
+      CLIENT_ID: ${CLIENT_ID:?CLIENT_ID is required}
+      CLIENT_SECRET: ${CLIENT_SECRET:?CLIENT_SECRET is required}
+      RUN_ID: ${RUN_ID:-compose}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${API_PORT:-3124}:3124"
+    volumes:
+      - downloads:/downloads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./convert-invert-frontend
+      args:
+        VITE_API_KEY: ${API_KEY:?API_KEY is required}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:
+  downloads:

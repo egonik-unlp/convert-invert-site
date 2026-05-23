@@ -1,0 +1,43 @@
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+convert-invert/.env
+convert-invert/.env.local
+convert-invert-frontend/.env
+convert-invert-frontend/.env.local
+convert-invert-frontend/.env.*.local
+
+# Rust
+convert-invert/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Node / Vite
+convert-invert-frontend/node_modules/
+convert-invert-frontend/dist/
+convert-invert-frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Logs and dumps
+convert-invert/logs-*
+convert-invert/old_logs/
+convert-invert/dumps/
+convert-invert/file.txt
+convert-invert/dempe
+convert-invert/saranga
+convert-invert/pedito.txt
+
+# Docker volumes (if mounted locally)
+postgres_data/
+redis_data/
+downloads/

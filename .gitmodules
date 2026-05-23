@@ -1,0 +1,6 @@
+[submodule "convert-invert"]
+	path = convert-invert
+	url = git@github.com:egonik-unlp/convert_invert.git
+[submodule "convert-invert-frontend"]
+	path = convert-invert-frontend
+	url = git@github.com:egonik-unlp/convert-invert-frontend.git
