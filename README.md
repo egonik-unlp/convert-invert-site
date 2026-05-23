@@ -104,3 +104,13 @@ convert-invert-frontend/        React 19 + Vite + Tailwind + shadcn/ui
   components/ui/                shadcn primitives
 docker-compose.yml              Postgres, Redis, Jaeger, API, frontend
 ```
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- [**System Overview & Data Flow**](docs/SYSTEM_OVERVIEW.md): High-level introduction and the lifecycle of a track.
+- [**System Architecture**](docs/ARCHITECTURE.md): Deep dive into backend managers, the run cycle, and infrastructure roles.
+- [**API, Database & Observability**](docs/API_AND_DATABASE.md): Reference for REST endpoints, schema, and tracing.
+- [**Setup & Development**](docs/DEVELOPMENT.md): Guide for environment variables, local setup, and reliability overhaul context.
+- [**Submodule Management**](docs/SUBMODULES.md): Instructions for handling the frontend and backend submodules.

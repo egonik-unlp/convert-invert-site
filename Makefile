@@ -16,6 +16,7 @@ help:
 	@printf '  %-18s %s\n' 'make env-check' 'Validate the root .env used by Docker Compose'
 	@printf '  %-18s %s\n' 'make up' 'Start the full Docker Compose stack'
 	@printf '  %-18s %s\n' 'make down' 'Stop the Docker Compose stack'
+	@printf '  %-18s %s\n' 'make full-down' 'Stop the Docker Compose stack and volumes'
 	@printf '  %-18s %s\n' 'make logs' 'Follow Docker Compose logs'
 	@printf '  %-18s %s\n' 'make ps' 'Show Docker Compose service status'
 	@printf '  %-18s %s\n' 'make downloads' 'List downloaded files in the API container'
@@ -24,6 +25,7 @@ help:
 	@printf '  %-18s %s\n' 'make backend' 'Run the Rust core CLI locally'
 	@printf '  %-18s %s\n' 'make frontend' 'Run the frontend dev server locally'
 	@printf '  %-18s %s\n' 'make check' 'Run Rust check, tests, clippy, and fmt check'
+	@printf '  %-18s %s\n' 'make analyzed-logs' 'Run analyze-logs binary on the current session logs'
 
 env-check:
 	@if [[ ! -f "$(ROOT_ENV)" ]]; then \
@@ -91,3 +93,5 @@ fmt:
 
 fmt-check:
 	cd $(BACKEND_DIR) && cargo fmt --check
+analyze-run:
+	cd $(BACKEND_DIR) && docker compose logs > worker-logs.log && cargo run --bin analyze_run_log -- worker-logs.log | tee ../analyzed-logs.txt && cd -
