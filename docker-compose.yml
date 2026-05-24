@@ -57,6 +57,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "${API_PORT:-3124}:3124"
+      - "41000-41031:41000-41031"
     volumes:
       - downloads:/downloads
     depends_on:
