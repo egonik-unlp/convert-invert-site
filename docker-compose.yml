@@ -55,7 +55,7 @@ services:
       CLIENT_SECRET: ${CLIENT_SECRET:?CLIENT_SECRET is required}
       RUN_ID: ${RUN_ID:-compose}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      SHARE_MODE: ${SHARE_MODE:-disabled}
+      SHARE_MODE: ${SHARE_MODE:-external}
       SHARE_PATH: ${SHARE_PATH:-/downloads}
     ports:
       - "${API_PORT:-3124}:3124"
@@ -79,6 +79,36 @@ services:
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_started
+
+  sharing:
+    build:
+      context: ./convert-host-downloads
+    restart: unless-stopped
+    environment:
+      USER_NAME: ${USER_NAME:?USER_NAME is required}
+      USER_PASSWORD: ${USER_PASSWORD:?USER_PASSWORD is required}
+      SHARE_PATH: /downloads
+      LISTEN_PORT: ${SHARE_LISTEN_PORT:-41032}
+      HEALTH_BIND: 0.0.0.0:8080
+      RESCAN_INTERVAL_SECS: ${SHARE_RESCAN_INTERVAL_SECS:-60}
+    ports:
+      - "${SHARE_LISTEN_PORT:-41032}:${SHARE_LISTEN_PORT:-41032}"
+    volumes:
+      - downloads:/downloads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
     depends_on:
       api:
         condition: service_started

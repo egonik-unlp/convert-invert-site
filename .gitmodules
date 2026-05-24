@@ -4,3 +4,6 @@
 [submodule "convert-invert-frontend"]
 	path = convert-invert-frontend
 	url = git@github.com:egonik-unlp/convert-invert-frontend.git
+[submodule "convert-host-downloads"]
+	path = convert-host-downloads
+	url = git@github.com:egonik-unlp/convert-host-downloads.git

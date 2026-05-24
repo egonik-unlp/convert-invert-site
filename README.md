@@ -33,6 +33,9 @@ The API listens on `:3124`, the frontend on `:5173`, Jaeger UI on `:16686`.
 Docker also publishes Soulseek listener ports `41000-41031` for worker P2P
 traffic. If you change `WORKER_PORT_BASE` or run more than the default workers,
 publish the same contiguous port range on the host and open it in the firewall.
+The sharing sidecar uses the same `USER_NAME` / `USER_PASSWORD` by default and
+publishes `SHARE_LISTEN_PORT` (default `41032`) while sharing the same
+`/downloads` volume.
 
 ## Authentication
 
@@ -73,20 +76,24 @@ profile and increase gradually:
 
 ```env
 WORKER_COUNT=1
+WORKER_ACCOUNT_MODE=same
 SEARCH_CONCURRENCY=1
 DOWNLOAD_CONCURRENCY=1
 SEARCH_TIMEOUT_SECS=20
 SEARCH_EMPTY_RESULT_CUTOFF=8
-MAX_DOWNLOAD_ATTEMPTS_PER_TRACK=2
-MAX_CANDIDATES_PER_TRACK=3
+MAX_DOWNLOAD_ATTEMPTS_PER_TRACK=4
+MAX_CANDIDATES_PER_TRACK=8
 MAX_SEARCH_PASSES_PER_TRACK=2
 MAX_REQUESTS_PER_TRACK=8
 ```
 
-Sharing is explicit. `SHARE_MODE=disabled` is the default because the pinned
-Soulseek library advertises counts but does not serve real uploaded files. Use
-`SHARE_MODE=external` only when another Soulseek-compatible client is sharing
-`SHARE_PATH` (default `/downloads`) from the same downloaded files.
+Compose starts a dedicated sharing sidecar because the pinned Rust Soulseek
+library advertises counts but does not reliably serve real uploaded files. The
+supported default is `WORKER_ACCOUNT_MODE=same`: one downloading account, one
+worker, and the sidecar logged in with the same `USER_NAME` while sharing
+`SHARE_PATH` (default `/downloads`). Do not raise `WORKER_COUNT` above `1` in
+this mode; use real separate Soulseek accounts before moving to a multi-account
+setup.
 
 ## If you previously committed credentials
 
