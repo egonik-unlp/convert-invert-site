@@ -9,7 +9,7 @@ ROOT_ENV := .env
 DOWNLOADS_DIR ?= downloads
 REQUIRED_ENV := POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB DATABASE_URL API_KEY USER_NAME USER_PASSWORD CLIENT_ID CLIENT_SECRET
 
-.PHONY: help env-check up down full-down logs ps downloads copy-downloads api frontend backend check test clippy fmt fmt-check install-frontend
+.PHONY: help env-check up down full-down logs ps downloads copy-downloads api frontend backend check test clippy fmt fmt-check install-frontend docs git-status
 
 help:
 	@printf '%s\n' 'Common commands:'
@@ -52,7 +52,7 @@ up: env-check
 
 down:
 	$(COMPOSE) down
-full-down:
+full-down: 
 	$(COMPOSE) down -v
 
 logs:
@@ -96,3 +96,7 @@ fmt-check:
 
 analyze-run:
 	cd $(BACKEND_DIR) && docker compose logs > worker-logs.log && cargo run --bin analyze_run_log -- worker-logs.log | tee ../analyzed-logs.txt && cd -
+docs: 
+	cargo doc --manifest-path=convert-invert/Cargo.toml
+git-status:
+	echo "In main project" && git status && git submodule foreach 'git status'
