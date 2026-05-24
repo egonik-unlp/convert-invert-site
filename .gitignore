@@ -41,3 +41,7 @@ convert-invert/pedito.txt
 postgres_data/
 redis_data/
 downloads/
+
+# Misc
+
+.antigravitycli/

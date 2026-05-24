@@ -55,6 +55,8 @@ services:
       CLIENT_SECRET: ${CLIENT_SECRET:?CLIENT_SECRET is required}
       RUN_ID: ${RUN_ID:-compose}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SHARE_MODE: ${SHARE_MODE:-disabled}
+      SHARE_PATH: ${SHARE_PATH:-/downloads}
     ports:
       - "${API_PORT:-3124}:3124"
       - "41000-41031:41000-41031"

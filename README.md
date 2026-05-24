@@ -30,6 +30,9 @@ docker compose up --build
 ```
 
 The API listens on `:3124`, the frontend on `:5173`, Jaeger UI on `:16686`.
+Docker also publishes Soulseek listener ports `41000-41031` for worker P2P
+traffic. If you change `WORKER_PORT_BASE` or run more than the default workers,
+publish the same contiguous port range on the host and open it in the firewall.
 
 ## Authentication
 
@@ -64,6 +67,26 @@ stricter cap of 5 requests/minute. Exceeding either returns `429 Too Many Reques
 
 See `convert-invert/.env.example` and `convert-invert-frontend/.env.example`
 for the complete list, including optional tuning knobs.
+
+For unstable Soulseek peers or fresh accounts, start with a conservative worker
+profile and increase gradually:
+
+```env
+WORKER_COUNT=1
+SEARCH_CONCURRENCY=1
+DOWNLOAD_CONCURRENCY=1
+SEARCH_TIMEOUT_SECS=20
+SEARCH_EMPTY_RESULT_CUTOFF=8
+MAX_DOWNLOAD_ATTEMPTS_PER_TRACK=2
+MAX_CANDIDATES_PER_TRACK=3
+MAX_SEARCH_PASSES_PER_TRACK=2
+MAX_REQUESTS_PER_TRACK=8
+```
+
+Sharing is explicit. `SHARE_MODE=disabled` is the default because the pinned
+Soulseek library advertises counts but does not serve real uploaded files. Use
+`SHARE_MODE=external` only when another Soulseek-compatible client is sharing
+`SHARE_PATH` (default `/downloads`) from the same downloaded files.
 
 ## If you previously committed credentials
 
