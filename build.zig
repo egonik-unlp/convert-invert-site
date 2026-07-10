@@ -65,11 +65,21 @@ pub fn build(b: *std.Build) void {
         "docker compose stop sharing >/dev/null 2>&1 || true; docker compose up -d db redis jaeger api",
     });
 
-    // The launcher (long-running). Runs after the UI is built and the backend is up.
+    // Ask the router (UPnP-IGD) to forward the Soulseek listen port so uploaders can connect
+    // back for file transfers. Best-effort: prints a hint and no-ops if UPnP is unavailable.
+    // (Won't help under ISP carrier-grade NAT, where inbound is blocked above your router.)
+    const upnp = b.addSystemCommand(&.{
+        "bash", "-c",
+        "port=$(grep -E '^(WORKER_PORT_BASE|LISTEN_PORT)=' .env 2>/dev/null | head -1 | cut -d= -f2); python3 tools/upnp/forward.py \"${port:-41000}\"",
+    });
+
+    // The launcher (long-running). Runs after the UI is built, the backend is up, and the
+    // router port is forwarded.
     const run = b.addRunArtifact(exe);
     if (b.args) |args| run.addArgs(args);
     run.step.dependOn(&build_ui.step);
     run.step.dependOn(&compose_up.step);
+    run.step.dependOn(&upnp.step);
 
     const serve_step = b.step("serve", "Launch everything: build UI, start the backend stack, serve on 0.0.0.0 (LAN)");
     serve_step.dependOn(&run.step);
@@ -79,6 +89,9 @@ pub fn build(b: *std.Build) void {
 
     const up_step = b.step("up", "Start the backend services (db, redis, jaeger, api, sharing)");
     up_step.dependOn(&compose_up.step);
+
+    const forward_step = b.step("forward", "Open the Soulseek listen port on your router via UPnP");
+    forward_step.dependOn(&upnp.step);
 
     const compose_down = b.addSystemCommand(&.{ "docker", "compose", "down" });
     const down_step = b.step("down", "Stop the backend services");
