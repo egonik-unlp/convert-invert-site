@@ -30,15 +30,21 @@ docker compose up --build
 ```
 
 The API listens on `:3124`, the frontend on `:5173`, Jaeger UI on `:16686`.
-Docker also publishes Soulseek listener ports `41000-41031` for worker P2P
-traffic. If you change `WORKER_PORT_BASE` or run more than the default workers,
-publish the same contiguous port range on the host and open it in the firewall.
-By default the stack runs **download-only with a single Soulseek account** — the sharing
-sidecar is off. Soulseek allows only one login per account, so one account cannot download
-*and* share at the same time. To share back (better peer reputation) you need a **second**
-Soulseek account: set `SHARE_MODE=external` plus `SHARE_USER_NAME` / `SHARE_USER_PASSWORD`,
-then start the sidecar with `docker compose --profile sharing up -d` (it publishes
-`SHARE_LISTEN_PORT`, default `41032`, and shares the `/downloads` volume).
+
+## Soulseek engine (`slsk`)
+
+Soulseek I/O (search, download, **and** share) is handled by a single `aioslsk`-based engine
+service (`convert-host-downloads`). One login does everything, and — unlike the old Rust
+`soulseek_rs` client — aioslsk uses the server-brokered "connect to peer" flow, so transfers
+work from behind NAT/CGNAT (it connects **out** to reachable uploaders instead of only waiting
+for inbound connections). The Rust backend keeps orchestration, judging, DB, Spotify, and the
+API, and delegates all Soulseek calls to the engine over HTTP (`SLSK_URL`, default
+`http://slsk:8080`).
+
+The engine owns the Soulseek listener port (default `41000`, published by the `slsk` service).
+For best download success, forward that port on your router — `zig build serve` attempts this
+automatically via UPnP. Behind ISP carrier-grade NAT you can't fully open the port, but
+aioslsk's connect-out still completes transfers whenever the uploader is reachable.
 
 ## Serve the dashboard on your LAN (`zig build serve`)
 
@@ -123,20 +129,11 @@ jittered delays, and (3) cooling down a peer after one of its transfers fails so
 peer is not hammered. In `WORKER_ACCOUNT_MODE=same` the API clamps `WORKER_COUNT` to `1`,
 because logging one account in concurrently is a common ban trigger.
 
-### Sharing (optional, needs a second account)
+### Sharing
 
-The pinned Rust Soulseek library downloads but does not reliably *serve* files, so sharing
-is handled by a separate `aioslsk` sidecar. Because Soulseek permits only one login per
-account, the downloader and the sidecar must use **different** accounts — the API refuses to
-start a run when `SHARE_MODE=external` and both would use the same account. So:
-
-- **Default (one account):** `SHARE_MODE=disabled`, sidecar off, download-only. This is what
-  `docker compose up` and `zig build serve` run. `WORKER_ACCOUNT_MODE=same` with
-  `WORKER_COUNT` clamped to `1`.
-- **Sharing (two accounts):** put the downloader account in `WORKER_USER_NAME` /
-  `WORKER_USER_PASSWORD`, a *different* account in `SHARE_USER_NAME` / `SHARE_USER_PASSWORD`,
-  set `SHARE_MODE=external`, and start the sidecar with
-  `docker compose --profile sharing up -d`.
+Sharing needs no extra setup or second account: the `slsk` engine shares the `/downloads`
+directory on the same login it downloads with (Soulseek allows one login per account, and one
+engine covers both). Files you download are shared back automatically for peer reputation.
 
 ## If you previously committed credentials
 

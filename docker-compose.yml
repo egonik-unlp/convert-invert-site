@@ -57,6 +57,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SHARE_MODE: ${SHARE_MODE:-external}
       SHARE_PATH: ${SHARE_PATH:-/downloads}
+      # Soulseek I/O (search + download + share) is delegated to the aioslsk engine service.
+      SLSK_URL: ${SLSK_URL:-http://slsk:8080}
       # Worker + search/download tuning (overridable from .env; defaults match the code).
       WORKER_COUNT: ${WORKER_COUNT:-1}
       WORKER_ACCOUNT_MODE: ${WORKER_ACCOUNT_MODE:-same}
@@ -75,10 +77,11 @@ services:
       PEER_COOLDOWN_SECS: ${PEER_COOLDOWN_SECS:-120}
     ports:
       - "${API_PORT:-3124}:3124"
-      - "41000-41031:41000-41031"
     volumes:
       - downloads:/downloads
     depends_on:
+      slsk:
+        condition: service_started
       db:
         condition: service_healthy
       redis:
@@ -99,11 +102,11 @@ services:
       api:
         condition: service_started
 
-  # Opt-in: only starts with `--profile sharing`. Soulseek allows one login per account,
-  # so sharing requires a SECOND account (SHARE_USER_NAME/SHARE_USER_PASSWORD + SHARE_MODE=external).
-  # The default single-account setup is download-only, so the sidecar stays off.
-  sharing:
-    profiles: ["sharing"]
+  # Soulseek engine (aioslsk): one login does search + download + share. The Rust api
+  # delegates all Soulseek I/O here over HTTP (SLSK_URL). aioslsk's server-brokered
+  # connections make transfers work from behind NAT/CGNAT. It owns the Soulseek listen port
+  # (published so peers can connect); the internal HTTP API (8080) is not published.
+  slsk:
     build:
       context: ./convert-host-downloads
     restart: unless-stopped
@@ -111,11 +114,12 @@ services:
       USER_NAME: ${USER_NAME:?USER_NAME is required}
       USER_PASSWORD: ${USER_PASSWORD:?USER_PASSWORD is required}
       SHARE_PATH: /downloads
-      LISTEN_PORT: ${SHARE_LISTEN_PORT:-41032}
+      LISTEN_PORT: ${LISTEN_PORT:-41000}
       HEALTH_BIND: 0.0.0.0:8080
-      RESCAN_INTERVAL_SECS: ${SHARE_RESCAN_INTERVAL_SECS:-60}
+      RESCAN_INTERVAL_SECS: ${SHARE_RESCAN_INTERVAL_SECS:-120}
     ports:
-      - "${SHARE_LISTEN_PORT:-41032}:${SHARE_LISTEN_PORT:-41032}"
+      - "${LISTEN_PORT:-41000}:${LISTEN_PORT:-41000}"
+      - "${LISTEN_PORT_OBFUSCATED:-41001}:${LISTEN_PORT_OBFUSCATED:-41001}"
     volumes:
       - downloads:/downloads
     healthcheck:
@@ -129,9 +133,6 @@ services:
       interval: 15s
       timeout: 5s
       retries: 20
-    depends_on:
-      api:
-        condition: service_started
 
 volumes:
   postgres_data:

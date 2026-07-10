@@ -52,17 +52,12 @@ pub fn build(b: *std.Build) void {
         "set -a; [ -f .env ] && . ./.env; set +a; VITE_API_KEY=\"${API_KEY:-}\" npm --prefix convert-invert-frontend run build",
     });
 
-    // Bring up the backend services. Builds images on first run; reuses them afterwards.
-    // The frontend container is excluded (this Zig launcher serves the UI), and so is the
-    // `sharing` sidecar: Soulseek allows one login per account, so a single account can only
-    // download OR share, not both. Default is download-only. To share, use a SECOND account
-    // (SHARE_MODE=external + SHARE_USER_NAME/SHARE_USER_PASSWORD) and start it with:
-    //   docker compose up -d sharing
+    // Bring up the backend services (builds images on first run; reuses them afterwards). The
+    // `slsk` service is the aioslsk Soulseek engine (search + download + share on one login);
+    // the api delegates to it. The compose frontend container is excluded — this Zig launcher
+    // serves the UI.
     const compose_up = b.addSystemCommand(&.{
-        "bash", "-c",
-        // Stop any running sharing sidecar first (single-account download-only default), then
-        // bring up the rest. `up -d` recreates the api if .env changed.
-        "docker compose stop sharing >/dev/null 2>&1 || true; docker compose up -d db redis jaeger api",
+        "docker", "compose", "up", "-d", "db", "redis", "jaeger", "slsk", "api",
     });
 
     // Ask the router (UPnP-IGD) to forward the Soulseek listen port so uploaders can connect

@@ -17,6 +17,10 @@ Cargo.lock.bak
 zig-out/
 .zig-cache/
 
+# Captured run logs
+*.log
+*.logs
+
 # Node / Vite
 convert-invert-frontend/node_modules/
 convert-invert-frontend/dist/
