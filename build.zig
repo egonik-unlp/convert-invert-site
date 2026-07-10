@@ -3,7 +3,7 @@ const std = @import("std");
 // Build launcher for convert-invert-site.
 //
 //   zig build serve                 LAUNCH EVERYTHING: build UI, start the backend stack
-//                                    (db, redis, jaeger, api, sharing), then serve the UI on
+//                                    (db, redis, jaeger, slsk, api), then serve the UI on
 //                                    0.0.0.0:8080 and reverse-proxy /api -> 127.0.0.1:3124.
 //   zig build serve -Dport=9000     pick a different LAN port
 //   zig build serve -Dbackend-port=3124
@@ -15,6 +15,13 @@ const std = @import("std");
 //
 // `serve` needs Zig 0.16+, Docker, Node, and a filled-in .env (the four credentials:
 // USER_NAME / USER_PASSWORD / CLIENT_ID / CLIENT_SECRET). Everything else has defaults.
+//
+// The backend stack lives at /srv/storage/docker/convert-invert (the boot deployment that
+// auto-starts via `restart: unless-stopped`), so `up`/`serve`/`down` reuse those containers
+// instead of launching a conflicting second copy from this repo's docker-compose.yml.
+const boot_dir = "/srv/storage/docker/convert-invert";
+const boot_compose = boot_dir ++ "/docker-compose.yml";
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -60,7 +67,9 @@ pub fn build(b: *std.Build) void {
     // the api delegates to it. The compose frontend container is excluded — this Zig launcher
     // serves the UI.
     const compose_up = b.addSystemCommand(&.{
-        "docker", "compose", "up", "-d", "db", "redis", "jaeger", "slsk", "api",
+        "docker",   "compose",   "--project-directory", boot_dir, "-f", boot_compose,
+        "up",       "-d",        "db",                  "redis",  "jaeger",
+        "slsk",     "api",
     });
 
     // Ask the router (UPnP-IGD) to forward the Soulseek listen port so uploaders can connect
@@ -99,7 +108,9 @@ pub fn build(b: *std.Build) void {
     const sync_step = b.step("sync", "Start a Spotify sync: zig build sync -Dplaylist=<url-or-id> [-Dworkers=N -Dchunk=N]");
     sync_step.dependOn(&sync.step);
 
-    const compose_down = b.addSystemCommand(&.{ "docker", "compose", "down" });
+    const compose_down = b.addSystemCommand(&.{
+        "docker", "compose", "--project-directory", boot_dir, "-f", boot_compose, "down",
+    });
     const down_step = b.step("down", "Stop the backend services");
     down_step.dependOn(&compose_down.step);
 }

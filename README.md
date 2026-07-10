@@ -31,6 +31,30 @@ docker compose up --build
 
 The API listens on `:3124`, the frontend on `:5173`, Jaeger UI on `:16686`.
 
+## Server deployment (auto-start on boot)
+
+On the server this runs as a standing deployment at **`/srv/storage/docker/convert-invert/`**
+(alongside `portainer`, `mysql`, `filebrowser`, …), not from this repo's working tree. That
+compose file pulls the prebuilt images from ghcr
+(`ghcr.io/egonik-unlp/convert-invert-{api,slsk,frontend}`), keeps `build:` contexts pointing
+back at this repo for rebuilds, and every service is `restart: unless-stopped` so the whole
+stack (db, redis, jaeger, slsk, api, frontend) comes up automatically after a reboot. Its
+`.env` is a symlink to this repo's `.env`, so there's one source of secrets/tuning. Postgres
+and Redis reuse the existing named volumes (`convert-invert-site_postgres_data` /
+`_redis_data`) and downloads live in the `/srv/storage/downloads` bind mount, so data survives
+redeploys.
+
+```bash
+cd /srv/storage/docker/convert-invert
+docker compose ps                       # status
+docker compose pull && docker compose up -d   # roll out newer ghcr images
+docker compose build && docker compose push   # rebuild from source and publish to ghcr
+```
+
+`zig build up` / `serve` / `down` in this repo drive that same boot stack (via
+`--project-directory /srv/storage/docker/convert-invert`), so they never spin up a second
+conflicting copy.
+
 ## Soulseek engine (`slsk`)
 
 Soulseek I/O (search, download, **and** share) is handled by a single `aioslsk`-based engine
