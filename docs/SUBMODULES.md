@@ -1,35 +1,29 @@
 # Git Submodules Manual
 
-This project is intended to be a top-level integration repository that pins two
+This project is a top-level integration repository (superproject) that pins three
 component repositories:
 
-| Path | Purpose | Remote | Current local branch |
+| Path | Purpose | Remote | Default branch |
 |---|---|---|---|
 | `convert-invert/` | Rust backend and worker code | `git@github.com:egonik-unlp/convert_invert.git` | `master` |
 | `convert-invert-frontend/` | React/Vite frontend | `git@github.com:egonik-unlp/convert-invert-frontend.git` | `main` |
+| `convert-host-downloads/` | Python `aioslsk` sharing sidecar | `git@github.com:egonik-unlp/convert-host-downloads.git` | `master` |
 
 ## Current State
 
-As of this manual, the workspace contains nested Git repositories, but it is not
-yet a working submodule setup:
+The superproject is fully configured: a versioned `.gitmodules` records all three
+submodules, the superproject index holds one gitlink per component path, and submodule
+Git metadata lives under `.git/modules/`. `git submodule status` and
+`git submodule update --init` work from the project root.
 
-- The repository root has no `.gitmodules` file.
-- `convert-invert/.git` and `convert-invert-frontend/.git` are full Git
-  directories inside the component folders.
-- The top-level `.git` directory exists, but `git status` at the root reports
-  `fatal: not a git repository`.
+After a plain clone (without `--recurse-submodules`), populate the components with:
 
-That means the root currently behaves like an ordinary directory containing two
-independent Git checkouts. A finished submodule setup should instead have:
+```bash
+git submodule update --init convert-invert convert-host-downloads convert-invert-frontend
+```
 
-- A valid top-level Git repository, usually called the superproject.
-- A versioned `.gitmodules` file.
-- One gitlink entry in the superproject index for each component path.
-- Submodule Git metadata stored under the superproject's `.git/modules/`
-  directory, with each submodule folder containing a small `.git` pointer file.
-
-Until those pieces exist, commands such as `git submodule status` and
-`git submodule update --init --recursive` cannot work from the project root.
+The `.git` inside each component folder is a small pointer file into
+`.git/modules/<name>`, not a full repository.
 
 ## Mental Model
 

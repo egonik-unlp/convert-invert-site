@@ -85,7 +85,17 @@ MAX_DOWNLOAD_ATTEMPTS_PER_TRACK=4
 MAX_CANDIDATES_PER_TRACK=8
 MAX_SEARCH_PASSES_PER_TRACK=2
 MAX_REQUESTS_PER_TRACK=8
+# Anti-ban pacing (set any to 0 to disable):
+RETRY_BACKOFF_MS=1000       # jittered backoff before each retry
+SEARCH_PACING_MS=500        # jittered delay before each search
+PEER_COOLDOWN_SECS=120      # skip a peer after it fails a transfer
 ```
+
+Beyond the worker profile, the backend also avoids getting banned by (1) skipping the
+Soulseek search entirely for tracks already downloaded, (2) pacing searches and retries with
+jittered delays, and (3) cooling down a peer after one of its transfers fails so a single bad
+peer is not hammered. In `WORKER_ACCOUNT_MODE=same` the API clamps `WORKER_COUNT` to `1`,
+because logging one account in concurrently is a common ban trigger.
 
 Compose starts a dedicated sharing sidecar because the pinned Rust Soulseek
 library advertises counts but does not reliably serve real uploaded files. The
@@ -134,6 +144,14 @@ convert-invert-frontend/        React 19 + Vite + Tailwind + shadcn/ui
   components/ui/                shadcn primitives
 docker-compose.yml              Postgres, Redis, Jaeger, API, frontend
 ```
+
+## LLM judge (optional, not wired by default)
+
+The `convert-invert/llm` Bun/LangChain service is an **experimental** secondary judge. It is
+**not** part of `docker-compose.yml` and the backend does not call it — the active judge is
+the Levenshtein scorer, with a `RelativeMi` score recorded alongside for evaluation. Run it
+manually (`cd convert-invert/llm && bun install && bun index.ts`) only if you are iterating on
+LLM-based scoring; wiring it into the judge path is a separate task.
 
 ## Documentation
 
