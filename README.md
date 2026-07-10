@@ -102,6 +102,9 @@ zig build sync -Dplaylist="https://open.spotify.com/playlist/<id>"   # or a bare
 
 Downloaded files are written to `DOWNLOADS_DIR` (default `/srv/storage/downloads`), a host
 folder bind-mounted into the api and engine — set it in `.env` to change where music lands.
+Each run files its completed tracks into a subfolder named after the originating Spotify
+playlist (e.g. `/srv/storage/downloads/My Chill Mix/…`); the engine still shares the whole
+`/downloads` tree, so foldering doesn't affect upload reputation.
 
 ## Authentication
 
