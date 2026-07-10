@@ -26,6 +26,9 @@ pub fn build(b: *std.Build) void {
         "api-key",
         "If set, inject this X-API-Key on proxied /api requests (the UI bundle already carries VITE_API_KEY from .env)",
     ) orelse "";
+    const sync_playlist = b.option([]const u8, "playlist", "Spotify playlist URL or ID to sync (for `zig build sync`)") orelse "";
+    const sync_workers = b.option(u16, "workers", "Workers for `zig build sync` (default 1)") orelse 1;
+    const sync_chunk = b.option(u16, "chunk", "Chunk size for `zig build sync` (default 15)") orelse 15;
 
     const options = b.addOptions();
     options.addOption(u16, "port", port);
@@ -82,11 +85,19 @@ pub fn build(b: *std.Build) void {
     const ui_step = b.step("ui", "Build the frontend bundle (bakes VITE_API_KEY from .env)");
     ui_step.dependOn(&build_ui.step);
 
-    const up_step = b.step("up", "Start the backend services (db, redis, jaeger, api, sharing)");
+    const up_step = b.step("up", "Start the backend services (db, redis, jaeger, slsk, api)");
     up_step.dependOn(&compose_up.step);
 
     const forward_step = b.step("forward", "Open the Soulseek listen port on your router via UPnP");
     forward_step.dependOn(&upnp.step);
+
+    // `zig build sync -Dplaylist=<url-or-id>` starts a Spotify sync via the running API.
+    const sync = b.addSystemCommand(&.{ "bash", "tools/sync.sh" });
+    sync.addArg(sync_playlist);
+    sync.addArg(b.fmt("{d}", .{sync_workers}));
+    sync.addArg(b.fmt("{d}", .{sync_chunk}));
+    const sync_step = b.step("sync", "Start a Spotify sync: zig build sync -Dplaylist=<url-or-id> [-Dworkers=N -Dchunk=N]");
+    sync_step.dependOn(&sync.step);
 
     const compose_down = b.addSystemCommand(&.{ "docker", "compose", "down" });
     const down_step = b.step("down", "Stop the backend services");

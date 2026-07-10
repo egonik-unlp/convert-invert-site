@@ -69,6 +69,16 @@ launcher inject `X-API-Key` server-side, so the secret never needs to be baked i
 browser bundle. This is an alternative to the full compose frontend container — useful when
 you only run the API and want a lightweight LAN server for the UI.
 
+Start a Spotify sync from the CLI (backend must be up):
+
+```bash
+zig build sync -Dplaylist="https://open.spotify.com/playlist/<id>"   # or a bare id
+#   -Dworkers=N  -Dchunk=N   (defaults 1 / 15)
+```
+
+Downloaded files are written to `DOWNLOADS_DIR` (default `/srv/storage/downloads`), a host
+folder bind-mounted into the api and engine — set it in `.env` to change where music lands.
+
 ## Authentication
 
 All `/api/*` endpoints require an `X-API-Key` header. The value must match the

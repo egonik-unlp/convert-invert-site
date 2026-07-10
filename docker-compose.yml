@@ -78,7 +78,7 @@ services:
     ports:
       - "${API_PORT:-3124}:3124"
     volumes:
-      - downloads:/downloads
+      - ${DOWNLOADS_DIR:-/srv/storage/downloads}:/downloads
     depends_on:
       slsk:
         condition: service_started
@@ -121,7 +121,7 @@ services:
       - "${LISTEN_PORT:-41000}:${LISTEN_PORT:-41000}"
       - "${LISTEN_PORT_OBFUSCATED:-41001}:${LISTEN_PORT_OBFUSCATED:-41001}"
     volumes:
-      - downloads:/downloads
+      - ${DOWNLOADS_DIR:-/srv/storage/downloads}:/downloads
     healthcheck:
       test:
         [
@@ -137,4 +137,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  downloads:
