@@ -37,6 +37,29 @@ The sharing sidecar uses the same `USER_NAME` / `USER_PASSWORD` by default and
 publishes `SHARE_LISTEN_PORT` (default `41032`) while sharing the same
 `/downloads` volume.
 
+## Serve the dashboard on your LAN (`zig build serve`)
+
+A small Zig launcher (`build.zig` + `tools/serve/`) serves the built UI on `0.0.0.0`
+and reverse-proxies `/api` to the backend, so you can open the dashboard from another
+machine on the network through a single origin (no CORS, no nginx, no Node to serve).
+Requires Zig 0.16+.
+
+```bash
+# 1. Build the frontend bundle once (needs Node):
+zig build ui
+# 2. Make sure the backend is reachable on :3124, e.g.:
+docker compose up -d api db redis jaeger
+# 3. Serve on 0.0.0.0:8080 and proxy /api -> 127.0.0.1:3124
+zig build serve
+#    Options: -Dport=9000  -Dbackend-port=3124  -Dapi-key=<API_KEY>
+```
+
+Then browse from another PC at `http://<this-machine-LAN-IP>:8080` (find the IP with
+`hostname -I`; open the port in your firewall). Passing `-Dapi-key=$API_KEY` makes the
+launcher inject `X-API-Key` server-side, so the secret never needs to be baked into the
+browser bundle. This is an alternative to the full compose frontend container — useful when
+you only run the API and want a lightweight LAN server for the UI.
+
 ## Authentication
 
 All `/api/*` endpoints require an `X-API-Key` header. The value must match the

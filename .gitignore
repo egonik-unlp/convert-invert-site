@@ -13,6 +13,10 @@ convert-invert/target/
 **/*.rs.bk
 Cargo.lock.bak
 
+# Zig (serve launcher)
+zig-out/
+.zig-cache/
+
 # Node / Vite
 convert-invert-frontend/node_modules/
 convert-invert-frontend/dist/
