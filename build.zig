@@ -53,9 +53,16 @@ pub fn build(b: *std.Build) void {
     });
 
     // Bring up the backend services. Builds images on first run; reuses them afterwards.
-    // The frontend container is intentionally excluded — this Zig launcher serves the UI.
+    // The frontend container is excluded (this Zig launcher serves the UI), and so is the
+    // `sharing` sidecar: Soulseek allows one login per account, so a single account can only
+    // download OR share, not both. Default is download-only. To share, use a SECOND account
+    // (SHARE_MODE=external + SHARE_USER_NAME/SHARE_USER_PASSWORD) and start it with:
+    //   docker compose up -d sharing
     const compose_up = b.addSystemCommand(&.{
-        "docker", "compose", "up", "-d", "db", "redis", "jaeger", "api", "sharing",
+        "bash", "-c",
+        // Stop any running sharing sidecar first (single-account download-only default), then
+        // bring up the rest. `up -d` recreates the api if .env changed.
+        "docker compose stop sharing >/dev/null 2>&1 || true; docker compose up -d db redis jaeger api",
     });
 
     // The launcher (long-running). Runs after the UI is built and the backend is up.

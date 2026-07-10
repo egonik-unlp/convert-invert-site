@@ -99,7 +99,11 @@ services:
       api:
         condition: service_started
 
+  # Opt-in: only starts with `--profile sharing`. Soulseek allows one login per account,
+  # so sharing requires a SECOND account (SHARE_USER_NAME/SHARE_USER_PASSWORD + SHARE_MODE=external).
+  # The default single-account setup is download-only, so the sidecar stays off.
   sharing:
+    profiles: ["sharing"]
     build:
       context: ./convert-host-downloads
     restart: unless-stopped

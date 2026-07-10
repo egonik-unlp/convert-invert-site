@@ -33,9 +33,12 @@ The API listens on `:3124`, the frontend on `:5173`, Jaeger UI on `:16686`.
 Docker also publishes Soulseek listener ports `41000-41031` for worker P2P
 traffic. If you change `WORKER_PORT_BASE` or run more than the default workers,
 publish the same contiguous port range on the host and open it in the firewall.
-The sharing sidecar uses the same `USER_NAME` / `USER_PASSWORD` by default and
-publishes `SHARE_LISTEN_PORT` (default `41032`) while sharing the same
-`/downloads` volume.
+By default the stack runs **download-only with a single Soulseek account** — the sharing
+sidecar is off. Soulseek allows only one login per account, so one account cannot download
+*and* share at the same time. To share back (better peer reputation) you need a **second**
+Soulseek account: set `SHARE_MODE=external` plus `SHARE_USER_NAME` / `SHARE_USER_PASSWORD`,
+then start the sidecar with `docker compose --profile sharing up -d` (it publishes
+`SHARE_LISTEN_PORT`, default `41032`, and shares the `/downloads` volume).
 
 ## Serve the dashboard on your LAN (`zig build serve`)
 
@@ -120,13 +123,20 @@ jittered delays, and (3) cooling down a peer after one of its transfers fails so
 peer is not hammered. In `WORKER_ACCOUNT_MODE=same` the API clamps `WORKER_COUNT` to `1`,
 because logging one account in concurrently is a common ban trigger.
 
-Compose starts a dedicated sharing sidecar because the pinned Rust Soulseek
-library advertises counts but does not reliably serve real uploaded files. The
-supported default is `WORKER_ACCOUNT_MODE=same`: one downloading account, one
-worker, and the sidecar logged in with the same `USER_NAME` while sharing
-`SHARE_PATH` (default `/downloads`). Do not raise `WORKER_COUNT` above `1` in
-this mode; use real separate Soulseek accounts before moving to a multi-account
-setup.
+### Sharing (optional, needs a second account)
+
+The pinned Rust Soulseek library downloads but does not reliably *serve* files, so sharing
+is handled by a separate `aioslsk` sidecar. Because Soulseek permits only one login per
+account, the downloader and the sidecar must use **different** accounts — the API refuses to
+start a run when `SHARE_MODE=external` and both would use the same account. So:
+
+- **Default (one account):** `SHARE_MODE=disabled`, sidecar off, download-only. This is what
+  `docker compose up` and `zig build serve` run. `WORKER_ACCOUNT_MODE=same` with
+  `WORKER_COUNT` clamped to `1`.
+- **Sharing (two accounts):** put the downloader account in `WORKER_USER_NAME` /
+  `WORKER_USER_PASSWORD`, a *different* account in `SHARE_USER_NAME` / `SHARE_USER_PASSWORD`,
+  set `SHARE_MODE=external`, and start the sidecar with
+  `docker compose --profile sharing up -d`.
 
 ## If you previously committed credentials
 
