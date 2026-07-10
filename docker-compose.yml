@@ -75,6 +75,10 @@ services:
       RETRY_BACKOFF_MS: ${RETRY_BACKOFF_MS:-1000}
       SEARCH_PACING_MS: ${SEARCH_PACING_MS:-500}
       PEER_COOLDOWN_SECS: ${PEER_COOLDOWN_SECS:-120}
+      # Download inactivity timeouts — free a stuck slot so it can't clog the pipeline (0 disables).
+      DOWNLOAD_QUEUED_TIMEOUT_SECS: ${DOWNLOAD_QUEUED_TIMEOUT_SECS:-45}
+      DOWNLOAD_STALL_TIMEOUT_SECS: ${DOWNLOAD_STALL_TIMEOUT_SECS:-30}
+      DOWNLOAD_HARD_TIMEOUT_SECS: ${DOWNLOAD_HARD_TIMEOUT_SECS:-180}
     ports:
       - "${API_PORT:-3124}:3124"
     volumes:

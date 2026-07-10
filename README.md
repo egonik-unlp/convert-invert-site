@@ -158,7 +158,22 @@ MAX_REQUESTS_PER_TRACK=8
 RETRY_BACKOFF_MS=1000       # jittered backoff before each retry
 SEARCH_PACING_MS=500        # jittered delay before each search
 PEER_COOLDOWN_SECS=120      # skip a peer after it fails a transfer
+# Download inactivity timeouts — free a stuck slot so it can't clog the pipeline (0 disables):
+DOWNLOAD_QUEUED_TIMEOUT_SECS=45   # parked in the remote queue, not transferring
+DOWNLOAD_STALL_TIMEOUT_SECS=30    # transferring but zero byte progress
+DOWNLOAD_HARD_TIMEOUT_SECS=180    # absolute ceiling per attempt (keep generous for big files)
 ```
+
+An inactive download (a peer parked in its remote queue, or connected but sending 0 bytes)
+holds a scarce download-concurrency slot and keeps its chunk from finishing, so a few dead
+peers can stall the whole run. The timeouts above abort such transfers, freeing the slot for a
+fresh candidate/peer; the aborted peer is then cooled down (`PEER_COOLDOWN_SECS`) so retries
+prefer someone else.
+
+You can also **pause/resume downloads manually** from the dashboard header (the ⏸ toggle) or
+the API (`POST /api/pipeline/pause`, `POST /api/pipeline/resume`, `GET /api/pipeline`).
+Pausing keeps the workers running but parks the download stage — in-flight transfers abort and
+wait, and no candidate/attempt budget is spent — so you can safely halt and resume a run.
 
 Beyond the worker profile, the backend also avoids getting banned by (1) skipping the
 Soulseek search entirely for tracks already downloaded, (2) pacing searches and retries with
