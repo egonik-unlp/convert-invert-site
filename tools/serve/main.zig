@@ -298,8 +298,8 @@ pub fn main() void {
         \\  API key inject :    {s}
         \\  Serving dir    :    {s}
         \\
-        \\  Make sure the backend is running (e.g. `docker compose up -d api db redis jaeger`).
-        \\  Ctrl-C to stop.
+        \\  Backend services are started for you by `zig build serve` (docker compose).
+        \\  Ctrl-C stops the UI server;  `zig build down`  stops the backend.
         \\
     , .{
         cfg.port,

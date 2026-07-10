@@ -2,24 +2,29 @@ const std = @import("std");
 
 // Build launcher for convert-invert-site.
 //
-//   zig build serve                 serve the built UI on 0.0.0.0:8080, proxy /api -> :3124
-//   zig build serve -Dport=9000     pick a different port
+//   zig build serve                 LAUNCH EVERYTHING: build UI, start the backend stack
+//                                    (db, redis, jaeger, api, sharing), then serve the UI on
+//                                    0.0.0.0:8080 and reverse-proxy /api -> 127.0.0.1:3124.
+//   zig build serve -Dport=9000     pick a different LAN port
 //   zig build serve -Dbackend-port=3124
-//   zig build serve -Dapi-key=XXXX  inject X-API-Key server-side (key stays off the browser)
-//   zig build ui                    (re)build the frontend bundle via npm
+//   zig build serve -Dapi-key=XXXX  also inject X-API-Key server-side (optional; the UI
+//                                    bundle already carries VITE_API_KEY from .env)
+//   zig build up                    just start the backend services
+//   zig build ui                    just (re)build the frontend bundle
+//   zig build down                  stop the backend services
 //
-// `serve` needs the backend reachable on 127.0.0.1:<backend-port> (e.g. from
-// `docker compose up -d api db redis jaeger`) and the UI built (`zig build ui`).
+// `serve` needs Zig 0.16+, Docker, Node, and a filled-in .env (the four credentials:
+// USER_NAME / USER_PASSWORD / CLIENT_ID / CLIENT_SECRET). Everything else has defaults.
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const port = b.option(u16, "port", "Port to serve the UI on (default 8080)") orelse 8080;
+    const port = b.option(u16, "port", "LAN port to serve the UI on (default 8080)") orelse 8080;
     const backend_port = b.option(u16, "backend-port", "Backend API port to proxy /api to (default 3124)") orelse 3124;
     const api_key = b.option(
         []const u8,
         "api-key",
-        "If set, inject this X-API-Key on proxied /api requests (keeps the key out of the browser bundle)",
+        "If set, inject this X-API-Key on proxied /api requests (the UI bundle already carries VITE_API_KEY from .env)",
     ) orelse "";
 
     const options = b.addOptions();
@@ -41,14 +46,34 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
+    // Build the frontend bundle, baking VITE_API_KEY from .env so the served app authenticates.
+    const build_ui = b.addSystemCommand(&.{
+        "bash", "-c",
+        "set -a; [ -f .env ] && . ./.env; set +a; VITE_API_KEY=\"${API_KEY:-}\" npm --prefix convert-invert-frontend run build",
+    });
+
+    // Bring up the backend services. Builds images on first run; reuses them afterwards.
+    // The frontend container is intentionally excluded — this Zig launcher serves the UI.
+    const compose_up = b.addSystemCommand(&.{
+        "docker", "compose", "up", "-d", "db", "redis", "jaeger", "api", "sharing",
+    });
+
+    // The launcher (long-running). Runs after the UI is built and the backend is up.
     const run = b.addRunArtifact(exe);
     if (b.args) |args| run.addArgs(args);
-    const serve_step = b.step("serve", "Serve the built UI on 0.0.0.0 and proxy /api to the backend (LAN-accessible)");
+    run.step.dependOn(&build_ui.step);
+    run.step.dependOn(&compose_up.step);
+
+    const serve_step = b.step("serve", "Launch everything: build UI, start the backend stack, serve on 0.0.0.0 (LAN)");
     serve_step.dependOn(&run.step);
 
-    // `zig build ui` builds the frontend bundle (needs Node/npm). Set VITE_API_KEY in your
-    // environment first if you prefer the key baked into the bundle over proxy injection.
-    const ui = b.addSystemCommand(&.{ "npm", "--prefix", "convert-invert-frontend", "run", "build" });
-    const ui_step = b.step("ui", "Build the frontend bundle (convert-invert-frontend/dist) via npm");
-    ui_step.dependOn(&ui.step);
+    const ui_step = b.step("ui", "Build the frontend bundle (bakes VITE_API_KEY from .env)");
+    ui_step.dependOn(&build_ui.step);
+
+    const up_step = b.step("up", "Start the backend services (db, redis, jaeger, api, sharing)");
+    up_step.dependOn(&compose_up.step);
+
+    const compose_down = b.addSystemCommand(&.{ "docker", "compose", "down" });
+    const down_step = b.step("down", "Stop the backend services");
+    down_step.dependOn(&compose_down.step);
 }
