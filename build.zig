@@ -2,16 +2,15 @@ const std = @import("std");
 
 // Build launcher for convert-invert-site.
 //
-//   zig build serve                 LAUNCH EVERYTHING: build UI, start the backend stack
-//                                    (db, redis, jaeger, slsk, api), then serve the UI on
-//                                    0.0.0.0:8080 and reverse-proxy /api -> 127.0.0.1:3124.
-//   zig build serve -Dport=9000     pick a different LAN port
-//   zig build serve -Dbackend-port=3124
-//   zig build serve -Dapi-key=XXXX  also inject X-API-Key server-side (optional; the UI
-//                                    bundle already carries VITE_API_KEY from .env)
-//   zig build up                    just start the backend services
-//   zig build ui                    just (re)build the frontend bundle
-//   zig build down                  stop the backend services
+//   zig build serve                 LAUNCH EVERYTHING: start the full docker stack (db, redis,
+//                                    jaeger, slsk, api, and the frontend UI on :5173), forward
+//                                    the Soulseek port, and print the LAN dashboard URL.
+//   zig build up                    start the full docker stack (same, without UPnP)
+//   zig build ui                    (optional) build a standalone frontend bundle
+//   zig build down                  stop the docker stack
+//
+// The dashboard is served by the docker `frontend` container (:5173) — it is the single UI,
+// reachable from any machine on the LAN. There is no separate Zig-served copy.
 //
 // `serve` needs Zig 0.16+, Docker, Node, and a filled-in .env (the four credentials:
 // USER_NAME / USER_PASSWORD / CLIENT_ID / CLIENT_SECRET). Everything else has defaults.
@@ -62,15 +61,22 @@ pub fn build(b: *std.Build) void {
         "set -a; [ -f .env ] && . ./.env; set +a; VITE_API_KEY=\"${API_KEY:-}\" npm --prefix convert-invert-frontend run build",
     });
 
-    // Bring up the backend services (builds images on first run; reuses them afterwards). The
-    // `slsk` service is the aioslsk Soulseek engine (search + download + share on one login);
-    // the api delegates to it. The compose frontend container is excluded — this Zig launcher
-    // serves the UI.
+    // Bring up the WHOLE stack, including the `frontend` container — the dashboard on :5173 is
+    // the single canonical UI (LAN-accessible via its docker port mapping). The `slsk` service
+    // is the aioslsk Soulseek engine (search + download + share on one login); the api delegates
+    // to it.
     const compose_up = b.addSystemCommand(&.{
-        "docker",   "compose",   "--project-directory", boot_dir, "-f", boot_compose,
-        "up",       "-d",        "db",                  "redis",  "jaeger",
-        "slsk",     "api",
+        "docker", "compose", "--project-directory", boot_dir,   "-f",  boot_compose,
+        "up",     "-d",      "db",                  "redis",     "jaeger", "slsk",
+        "api",    "frontend",
     });
+
+    // Print the LAN URL of the docker frontend so it's easy to open from another machine.
+    const announce = b.addSystemCommand(&.{
+        "bash", "-c",
+        "set -a; [ -f .env ] && . ./.env; set +a; ip=$(hostname -I 2>/dev/null | awk '{print $1}'); echo; echo \"  Dashboard: http://${ip:-localhost}:${FRONTEND_PORT:-5173}  (open from any machine on your LAN)\"; echo",
+    });
+    announce.step.dependOn(&compose_up.step);
 
     // Ask the router (UPnP-IGD) to forward the Soulseek listen port so uploaders can connect
     // back for file transfers. Best-effort: prints a hint and no-ops if UPnP is unavailable.
@@ -80,22 +86,22 @@ pub fn build(b: *std.Build) void {
         "port=$(grep -E '^(WORKER_PORT_BASE|LISTEN_PORT)=' .env 2>/dev/null | head -1 | cut -d= -f2); python3 tools/upnp/forward.py \"${port:-41000}\"",
     });
 
-    // The launcher (long-running). Runs after the UI is built, the backend is up, and the
-    // router port is forwarded.
-    const run = b.addRunArtifact(exe);
-    if (b.args) |args| run.addArgs(args);
-    run.step.dependOn(&build_ui.step);
-    run.step.dependOn(&compose_up.step);
-    run.step.dependOn(&upnp.step);
+    // `zig build serve` = launch the whole docker stack (incl. the frontend UI on :5173),
+    // forward the Soulseek port, and print the LAN URL. The dashboard is served by the docker
+    // `frontend` container — there is no separate Zig-served UI.
+    const serve_step = b.step("serve", "Launch the full docker stack (incl. the :5173 dashboard) and open the Soulseek port");
+    serve_step.dependOn(&compose_up.step);
+    serve_step.dependOn(&upnp.step);
+    serve_step.dependOn(&announce.step);
 
-    const serve_step = b.step("serve", "Launch everything: build UI, start the backend stack, serve on 0.0.0.0 (LAN)");
-    serve_step.dependOn(&run.step);
-
+    // Kept as an optional standalone bundle build (e.g. for a custom static host); not part of
+    // `serve`, which uses the docker `frontend` container.
     const ui_step = b.step("ui", "Build the frontend bundle (bakes VITE_API_KEY from .env)");
     ui_step.dependOn(&build_ui.step);
 
-    const up_step = b.step("up", "Start the backend services (db, redis, jaeger, slsk, api)");
+    const up_step = b.step("up", "Start the full docker stack (db, redis, jaeger, slsk, api, frontend)");
     up_step.dependOn(&compose_up.step);
+    up_step.dependOn(&announce.step);
 
     const forward_step = b.step("forward", "Open the Soulseek listen port on your router via UPnP");
     forward_step.dependOn(&upnp.step);
