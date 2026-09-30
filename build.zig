@@ -15,10 +15,10 @@ const std = @import("std");
 // `serve` needs Zig 0.16+, Docker, Node, and a filled-in .env (the four credentials:
 // USER_NAME / USER_PASSWORD / CLIENT_ID / CLIENT_SECRET). Everything else has defaults.
 //
-// The backend stack lives at /srv/storage/docker/convert-invert (the boot deployment that
+// The backend stack lives at /srv/shared/docker/convert-invert (the boot deployment that
 // auto-starts via `restart: unless-stopped`), so `up`/`serve`/`down` reuse those containers
 // instead of launching a conflicting second copy from this repo's docker-compose.yml.
-const boot_dir = "/srv/storage/docker/convert-invert";
+const boot_dir = "/srv/shared/docker/convert-invert";
 const boot_compose = boot_dir ++ "/docker-compose.yml";
 
 pub fn build(b: *std.Build) void {

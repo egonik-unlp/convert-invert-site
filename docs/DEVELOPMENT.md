@@ -4,7 +4,8 @@ This guide covers the necessary steps to set up, configure, and develop for `con
 
 ## Prerequisites
 - **Rust**: Latest stable version.
-- **Node.js / Bun**: For the LLM service.
+- **Node.js**: For the frontend. (**Bun** only for the experimental `llm` module.)
+- **ollama** (optional): Required only to run the `smol` judge — must serve `eduardogonik/smol-judge:c200-q8` and listen on the docker bridge (`OLLAMA_HOST=0.0.0.0`).
 - **Docker & Docker Compose**: For the full infrastructure (Postgres, Redis, Jaeger).
 - **Spotify API Credentials**: `CLIENT_ID` and `CLIENT_SECRET` from the [Spotify Developer Dashboard](https://developer.spotify.com/).
 - **Soulseek Credentials**: A valid username and password.
@@ -19,6 +20,7 @@ The system uses several `.env` files. Templates are provided:
 - `SEARCH_CONCURRENCY`: Number of concurrent searches per worker.
 - `DOWNLOAD_CONCURRENCY`: Number of concurrent downloads per worker.
 - `DB_POOL_MAX_SIZE`: Should be at least `SEARCH_CONCURRENCY + DOWNLOAD_CONCURRENCY + 2`.
+- `JUDGE_BACKEND`: `levenshtein` (default) or `smol`. See the [Judges section of the README](../README.md#judges) for the full `SMOL_JUDGE_*` set.
 
 ---
 
@@ -49,7 +51,7 @@ npm install
 npm run dev
 ```
 
-**LLM Service (Node/Bun)**:
+**Experimental `llm` module (Node/Bun)** — not wired into the pipeline, not in compose:
 ```bash
 cd convert-invert/llm
 bun install

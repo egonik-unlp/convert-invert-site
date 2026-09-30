@@ -15,7 +15,11 @@ The backend API is served by the `trigger_server` binary. All endpoints (except 
 | `/api/network` | `GET` | Soulseek network status. |
 | `/api/playlists` | `GET` | List active runs/playlists. |
 | `/api/playlists/all` | `GET` | History of all runs. |
-| `/api/tracks/{id}/candidates` | `GET` | Candidates found for a specific track. |
+| `/api/tracks/{id}/candidates` | `GET` | Candidates found for a specific track, each with every judge's verdict. |
+| `/api/judgements` | `GET` | Judgement log, newest first, plus a summary over the same filters. Query: `limit`, `cursor`, `judge`, `label`, `accepted`. |
+| `/api/config` | `GET` | Judge threshold, effective judge (backend/model/url/source), and worker tuning. |
+| `/api/judge` | `POST` | Switch the judge at runtime: `{"backend": "smol"\|"levenshtein", "url": "http://…"}`. Applies to the next run; a run already in flight keeps the judge it started with. |
+| `/api/judge/reset` | `POST` | Drop the override; revert to the judge the deployment configures. |
 | `/api/logs` | `GET` | System logs. |
 | `/api/workers/status` | `GET` | Status of active workers and their current tasks. |
 | `/api/workers/start` | `POST` | Start a new worker run for a playlist. |
@@ -41,7 +45,29 @@ Stores candidates found on Soulseek and their scores.
 - `id` (Primary Key)
 - `track_id` (Foreign Key to `search_items`)
 - `filename`, `username`, `size`
-- `score` (Levenshtein/LLM score)
+- `score` (the active judge's score; see `judgements` for *why* it got that score)
+- `relative_mi_score` (experimental, recorded but never acted on)
+
+### `judgements`
+One row per (candidate, judge) verdict — *why* a candidate got its score, which
+`judge_submissions.score` alone cannot say.
+- `id` (Primary Key)
+- `submission` (Foreign Key to `judge_submissions`, `ON DELETE CASCADE`)
+- `judge` (`levenshtein` | `smol-judge`)
+- `model`: the model that answered. A `+rules` suffix (e.g.
+  `eduardogonik/smol-judge:c200-q8+rules`) means the deterministic rule engine
+  settled it outright and no inference ran — which is how the two stages of the
+  `smol` judge are told apart after the fact.
+- `label` (`exact` | `wrong_version` | `wrong_artist` | `different`; null for judges that only produce a number)
+- `score`, `accepted`, `latency_ms`
+- `prompt_version`: the prompt contract the verdict was produced under
+- `raw`: the judge's literal reply. For a rule-settled verdict this is
+  `{"label":"exact","rule":"R4_exact"}` — the rule that fired, by name.
+- `error`: set when the judge failed and a fallback score stood in
+- `created_at`
+- Unique on `(submission, judge)`: a re-judge replaces the previous verdict, and
+  re-sending an identical one is a no-op, so `created_at` means "when the judge
+  last changed its mind".
 
 ### `downloaded_file`
 Metadata for successfully downloaded files.

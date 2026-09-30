@@ -1,7 +1,7 @@
 # convert-invert-site
 
 A Spotify-playlist-to-Soulseek bridge: matches Spotify tracks against the Soulseek
-network, scores candidates with a Levenshtein-based judge, and downloads the best
+network, scores candidates with a Levenshtein or rules+fine-tuned-LLM judge, and downloads the best
 match. Rust + Actix backend, React + Vite frontend.
 
 ## Quick start
@@ -33,7 +33,7 @@ The API listens on `:3124`, the frontend on `:5173`, Jaeger UI on `:16686`.
 
 ## Server deployment (auto-start on boot)
 
-On the server this runs as a standing deployment at **`/srv/storage/docker/convert-invert/`**
+On the server this runs as a standing deployment at **`/srv/shared/docker/convert-invert/`**
 (alongside `portainer`, `mysql`, `filebrowser`, …), not from this repo's working tree. That
 compose file pulls the prebuilt images from ghcr
 (`ghcr.io/egonik-unlp/convert-invert-{api,slsk,frontend}`), keeps `build:` contexts pointing
@@ -45,14 +45,14 @@ and Redis reuse the existing named volumes (`convert-invert-site_postgres_data` 
 redeploys.
 
 ```bash
-cd /srv/storage/docker/convert-invert
+cd /srv/shared/docker/convert-invert
 docker compose ps                       # status
 docker compose pull && docker compose up -d   # roll out newer ghcr images
 docker compose build && docker compose push   # rebuild from source and publish to ghcr
 ```
 
 `zig build up` / `serve` / `down` in this repo drive that same boot stack (via
-`--project-directory /srv/storage/docker/convert-invert`), so they never spin up a second
+`--project-directory /srv/shared/docker/convert-invert`), so they never spin up a second
 conflicting copy.
 
 ## Soulseek engine (`slsk`)
@@ -227,13 +227,133 @@ convert-invert-frontend/        React 19 + Vite + Tailwind + shadcn/ui
 docker-compose.yml              Postgres, Redis, Jaeger, API, frontend
 ```
 
-## LLM judge (optional, not wired by default)
+## Judges
 
-The `convert-invert/llm` Bun/LangChain service is an **experimental** secondary judge. It is
-**not** part of `docker-compose.yml` and the backend does not call it — the active judge is
-the Levenshtein scorer, with a `RelativeMi` score recorded alongside for evaluation. Run it
-manually (`cd convert-invert/llm && bun install && bun index.ts`) only if you are iterating on
-LLM-based scoring; wiring it into the judge path is a separate task.
+Every Soulseek candidate is scored by one judge, and only candidates above
+`JUDGE_THRESHOLD` (0.75) are downloaded. Which judge runs is `JUDGE_BACKEND`:
+
+| `JUDGE_BACKEND` | What it does |
+| --- | --- |
+| `levenshtein` (default) | Normalised string similarity between the filename and the Spotify metadata. No extra services. |
+| `smol` | A deterministic rule engine in front of the fine-tuned SmolLM judge (`eduardogonik/smol-judge:c200-q8`) served by ollama. The rules settle ~83% of candidates without inference. |
+
+A `RelativeMi` score is recorded alongside either judge for evaluation, in
+`judge_submissions.relative_mi_score`.
+
+### The smol judge
+
+`smol` is a **two-stage** judge, not just a model call: a deterministic rule
+engine answers what it can, and only the remainder reaches the model.
+
+`smol-judge` itself is a 135M SmolLM2 fine-tuned on ~12,200 (Spotify metadata,
+Soulseek filename) pairs. It answers with a **label** rather than a distance:
+
+| Label | Meaning | Score |
+| --- | --- | --- |
+| `exact` | The requested recording. | 1.0 |
+| `wrong_version` | Right song, wrong recording — remix, live, edit, instrumental. | 0.3 |
+| `wrong_artist` | Title matches, different act performing. | 0.05 |
+| `different` | An unrelated track. | 0.0 |
+
+Only `exact` clears the threshold. That is the point of it: `Only Human` and
+`Only Human (Skream Remix)` are nearly the same string, so Levenshtein scores
+both high, and the remix gets downloaded. Q8_0 scores within noise of fp32
+(92.5% vs 91.6% precision on 826 held-out rows) at ~200ms per candidate.
+
+The score the pipeline acts on is derived from the label, not from the number
+the model emits — a garbled number cannot flip a download decision. The model's
+literal reply is still stored for auditing.
+
+To enable it:
+
+```bash
+ollama pull eduardogonik/smol-judge:c200-q8
+# the ollama service must listen on the docker bridge, not just loopback:
+#   OLLAMA_HOST=0.0.0.0
+echo 'JUDGE_BACKEND=smol' >> .env
+docker compose up -d api
+```
+
+### The rule engine (stage one)
+
+Before any inference, each candidate goes through the deterministic rule engine
+in `judges/rules.rs`. Each rule returns a tier:
+
+| Tier | Meaning |
+| --- | --- |
+| `Gold` | Final. Short-circuits — the model is never consulted. |
+| `Weak` | Recorded but not trusted; the model still decides. |
+| `Abstain` | No opinion; the model decides. |
+
+Two things justify putting it in front of the model:
+
+- **Cost.** It settles ~83% of real candidates with no inference at all, turning
+  a 200-candidate query from ~40s of model time into a few seconds.
+- **Accuracy.** On 826 held-out rows the hybrid beat the model alone (96.0% vs
+  93.6% accuracy, 26 vs 32 wrong files accepted). The rules also catch a failure
+  the model reliably gets wrong: a *different* track sitting in a folder named
+  after the requested one — asking for "Unreasonable Behaviour" and being handed
+  `…/Unreasonable Behaviour/The Sound Of The Big Babou.mp3`.
+
+The rules were ported from `src/rules.ts` in the `smol-model-test` repo, where
+they were developed against all 15,374 real (query, candidate) pairs and audited
+by hand twice. `Weak` exists precisely because that audit found some rules
+unreliable — `wrong_artist` was demoted after being wrong on both sampled rows.
+
+| Tier | Rules |
+| --- | --- |
+| `Gold` | `R2_placeholder_leaf`, `R3_version_mismatch`, `R4_exact`, `R4b_exact_via_album`, `R5_no_title_overlap`, `R6_missing_title_token`, `R7_title_superset`, `R7b_title_plus_extra_word` |
+| `Weak` | `W1_exact_short_title_folder_artist`, `W2_low_title_overlap`, `W3_wrong_artist_unverified` |
+| `Abstain` | `A_defer_to_model` |
+
+A verdict the rules settled is recorded with its model tagged
+`eduardogonik/smol-judge:c200-q8+rules` and a `raw` of
+`{"label":"exact","rule":"R4_exact"}`, so the judgement log tells the two stages
+apart after the fact — and names the rule that fired.
+
+Set `SMOL_JUDGE_RULES=0` (also `false` / `off`) to bypass the engine and measure
+the model unaided. The default is on.
+
+### Switching judges at runtime
+
+The right judge depends on what the machine is doing. The same model answers in
+~100ms on an idle host and 10–17s on one busy training something else, and at
+200 candidates per search that is the difference between 20 seconds and half an
+hour of judging per track. So the judge can be switched from the dashboard's
+**Judgements** view without redeploying:
+
+- Levenshtein ⇄ smol judge, and for the smol judge, which ollama it talks to.
+- `POST /api/judge {"backend": "smol"|"levenshtein", "url": "http://…"}`,
+  `POST /api/judge/reset` to drop the override.
+- The override lives in Redis (`judge:backend`, `judge:url`) and takes effect on
+  the **next run** — a run already in flight keeps the judge it started with.
+  `/api/config` reports the effective judge and whether it is `env` or `override`.
+
+The environment stays the source of truth; the override is a temporary lever
+over it, and Reset returns to whatever the deployment configures.
+
+If ollama is unreachable the run does not stop: `SMOL_JUDGE_FALLBACK` decides
+whether the Levenshtein score stands in (default) or the candidate is rejected.
+Either way the error is recorded on the judgement, so a degraded run is visible
+rather than silent. See `.env.example` for the full `SMOL_JUDGE_*` set.
+
+The model is trained in a separate repo (`smol-model-test`); `src/prompt.ts`
+there and `judges/smol.rs` here render the same prompt, tagged `p1`. If one
+changes, both must, and `PROMPT_VERSION` must be bumped — every stored judgement
+records the version it was produced under.
+
+### Judgement log
+
+Every verdict is written to the `judgements` table (one row per candidate per
+judge, upserted on re-judge) with the label, model, prompt version, latency,
+the raw reply and any error. `GET /api/judgements` serves that log with a
+summary over the same filters, and the dashboard's **Judgements** view renders
+it: verdict mix, accept rate, latency, errors, and a filterable feed. The
+per-track candidate modal groups candidates by verdict and shows what the judge
+was asked and what it replied.
+
+The `convert-invert/llm` Bun/LangChain service is a separate **experimental**
+scorer, not part of `docker-compose.yml` and not called by the backend.
 
 ## Documentation
 

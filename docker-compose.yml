@@ -79,8 +79,26 @@ services:
       DOWNLOAD_QUEUED_TIMEOUT_SECS: ${DOWNLOAD_QUEUED_TIMEOUT_SECS:-45}
       DOWNLOAD_STALL_TIMEOUT_SECS: ${DOWNLOAD_STALL_TIMEOUT_SECS:-30}
       DOWNLOAD_HARD_TIMEOUT_SECS: ${DOWNLOAD_HARD_TIMEOUT_SECS:-180}
+      # Judge. `levenshtein` (default) scores by string similarity; `smol` asks the
+      # fine-tuned SmolLM judge served by ollama, which answers with a label
+      # (exact / wrong_version / wrong_artist / different) instead of a distance.
+      JUDGE_BACKEND: ${JUDGE_BACKEND:-levenshtein}
+      SMOL_JUDGE_URL: ${SMOL_JUDGE_URL:-http://host.docker.internal:11434}
+      SMOL_JUDGE_MODEL: ${SMOL_JUDGE_MODEL:-eduardogonik/smol-judge:c200-q8}
+      # The rule engine in front of the model; settles ~83% of candidates with no
+      # inference. 0/false/off measures the model unaided.
+      SMOL_JUDGE_RULES: ${SMOL_JUDGE_RULES:-true}
+      SMOL_JUDGE_CONCURRENCY: ${SMOL_JUDGE_CONCURRENCY:-4}
+      SMOL_JUDGE_TIMEOUT_SECS: ${SMOL_JUDGE_TIMEOUT_SECS:-30}
+      SMOL_JUDGE_KEEP_ALIVE: ${SMOL_JUDGE_KEEP_ALIVE:-30m}
+      SMOL_JUDGE_FALLBACK: ${SMOL_JUDGE_FALLBACK:-levenshtein}
     ports:
       - "${API_PORT:-3124}:3124"
+    # Reaches an ollama running on the docker host. That ollama must listen on
+    # the bridge (OLLAMA_HOST=0.0.0.0), not just 127.0.0.1, or the judge cannot
+    # connect. Point SMOL_JUDGE_URL elsewhere to use a remote ollama instead.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${DOWNLOADS_DIR:-/srv/storage/downloads}:/downloads
     depends_on:

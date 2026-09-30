@@ -2,6 +2,9 @@
 .env
 .env.local
 .env.*.local
+# Timestamped copies left behind when tuning .env — real credentials, not templates.
+.env.bak*
+*.env.bak*
 convert-invert/.env
 convert-invert/.env.local
 convert-invert-frontend/.env
