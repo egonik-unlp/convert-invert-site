@@ -1,0 +1,65 @@
+schema: sdd-with-knowledge
+
+# Contexto inyectado en todos los artefactos del change.
+context: |
+  Antes de proponer cualquier cambio, consultá Graphify vía MCP.
+  Tools: query_graph, get_node, get_neighbors, shortest_path.
+  El grafo vive en graphify-out/graph.json y se reconstruye solo vía git hooks.
+
+  OpenSpec maneja living specs en openspec/specs/<capability>/ (contrato formal).
+  knowledge/ es el conocimiento humano curado, organizado por módulos
+  (modules/<module>/use-cases/<capability>/), con un INDEX.md de navegación por dominio.
+  Documenter sincroniza knowledge/ ← openspec/ post-archive vía /documenter distill.
+
+  Regla divisoria: todo lo que Graphify puede responder (estructura del código,
+  entry points, dependencias) NO vive en knowledge/. Consultar el grafo.
+
+  Archivos de referencia para consultar durante el proposal:
+    - knowledge/INDEX.md                                   — índice de módulos (entry point)
+    - knowledge/architecture.md                            — overview narrativo
+    - knowledge/stack.md                                   — stack con por qué de cada lib
+    - knowledge/conventions.md                             — convenciones de código/proceso
+    - knowledge/decisions.md                               — decisiones macro (chequear conflictos)
+    - knowledge/modules/<m>/INDEX.md                       — navegación del módulo (intent → flow)
+    - knowledge/modules/<m>/use-cases/<x>/spec.md          — contrato narrativo del use-case (qué debe cumplirse)
+    - knowledge/modules/<m>/use-cases/<x>/flow.md          — flujo funcional end-to-end (qué pasa y por qué) + diagrama
+    - knowledge/modules/<m>/use-cases/<x>/decisions.md     — decisiones del use-case (por qué se eligió)
+    - knowledge/modules/<m>/use-cases/<x>/notes.md         — lore, gotchas, TODOs
+
+  Convención de naming: el slug del capability en openspec/specs/<capability>/
+  coincide 1:1 con el use-case anidado knowledge/modules/<module>/use-cases/<capability>/.
+  El slug es único globalmente, así que /documenter distill resuelve la ubicación por glob
+  (knowledge/modules/*/use-cases/<capability>/). La ubicación es la membresía.
+
+  Al proponer, el primer artefacto a generar es context.md (consolidar subgrafo + knowledge).
+
+# Reglas por tipo de artefacto
+rules:
+  proposal:
+    - Consultar Graphify para identificar nodos/comunidades afectados antes de escribir
+    - Listar en "Impact" los archivos derivados del subgrafo (no de grep)
+    - Linkear use-cases relacionados de knowledge/modules/<m>/use-cases/
+    - Si el change contradice knowledge/decisions.md o knowledge/modules/<m>/use-cases/<x>/decisions.md, hacerlo explícito
+
+  specs:
+    - No duplicar información de knowledge/ (linkear, no repetir)
+    - Usar Given/When/Then para scenarios
+    - Emitir delta spec con secciones ADDED/MODIFIED/REMOVED Requirements
+    - El slug del capability debe coincidir con el use-case anidado en knowledge/modules/<m>/use-cases/ (resuelto por glob)
+
+  design:
+    - Referenciar nodos concretos del grafo (graph://node:X o graph://community:X)
+    - Registrar decisiones con rationale corto; documenter las destila post-archive
+
+  ui-ux:
+    - Primera línea bajo el heading debe ser veredicto explícito ("Aplica" o "No aplica — backend-only")
+    - Si "No aplica", justificar en 1 línea por qué no hay superficie de UI
+    - Si "Aplica", llenar las 3 secciones (Componentes/flujos, Wireframes, Accesibilidad)
+    - No duplicar lo que ya está en design.md — UI/UX es la capa visible al usuario, no el approach técnico
+    - Wireframes pueden ser refs externos (Figma/Stitch) o ASCII inline; ambos válidos
+    - Accesibilidad es obligatoria si "Aplica" — no opcional
+
+  tasks:
+    - 'La última task SIEMPRE debe ser: post-archive -> /documenter distill <change-id>'
+    - Las tasks de implementación deben referenciar el design.md, no repetir el diseño
+    - Si ui-ux.md tiene "Aplica", incluir tasks de implementación de componentes y de validación a11y

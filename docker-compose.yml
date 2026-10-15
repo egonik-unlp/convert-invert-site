@@ -46,8 +46,14 @@ services:
       JAEGER_URL: http://jaeger:16686
       OTLP_ENDPOINT: http://jaeger:4317
       DOWNLOAD_PATH: /downloads
+      # Service token for scripts only; the browser authenticates with a session cookie.
       API_KEY: ${API_KEY:?API_KEY is required — generate with `openssl rand -hex 32`}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      # Login with Spotify.
+      SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI:-http://localhost:5173/api/auth/callback}
+      TOKEN_ENC_KEY: ${TOKEN_ENC_KEY:?TOKEN_ENC_KEY is required — generate with `openssl rand -base64 32`}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       USER_NAME: ${USER_NAME:?USER_NAME is required}
       USER_PASSWORD: ${USER_PASSWORD:?USER_PASSWORD is required}
       LISTEN_PORT: ${LISTEN_PORT:-41000}
@@ -88,7 +94,8 @@ services:
       # The rule engine in front of the model; settles ~83% of candidates with no
       # inference. 0/false/off measures the model unaided.
       SMOL_JUDGE_RULES: ${SMOL_JUDGE_RULES:-true}
-      SMOL_JUDGE_CONCURRENCY: ${SMOL_JUDGE_CONCURRENCY:-4}
+      SMOL_JUDGE_CONCURRENCY: ${SMOL_JUDGE_CONCURRENCY:-2}
+      SMOL_JUDGE_NUM_THREAD: ${SMOL_JUDGE_NUM_THREAD:-2}
       SMOL_JUDGE_TIMEOUT_SECS: ${SMOL_JUDGE_TIMEOUT_SECS:-30}
       SMOL_JUDGE_KEEP_ALIVE: ${SMOL_JUDGE_KEEP_ALIVE:-30m}
       SMOL_JUDGE_FALLBACK: ${SMOL_JUDGE_FALLBACK:-levenshtein}
@@ -115,7 +122,6 @@ services:
     build:
       context: ./convert-invert-frontend
       args:
-        VITE_API_KEY: ${API_KEY:?API_KEY is required}
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     restart: unless-stopped
     ports:
