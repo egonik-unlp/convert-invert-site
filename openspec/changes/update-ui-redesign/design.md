@@ -109,6 +109,23 @@ App
   cambia el `Host`, así que el origen del dev server tiene que estar en `ALLOWED_ORIGINS` para que pasen las
   escrituras (chequeo CSRF).
 
+### Decisiones al armar las imágenes de Docker
+
+- **Prefijo de ruta.** El bundle usa URLs relativas (`base: './'`, `API_BASE = "api"`), así que la misma
+  imagen anda en `/` y montada bajo un prefijo (`/convert/` detrás de Caddy o Funnel). El backend saca el
+  prefijo de `SPOTIFY_REDIRECT_URI` (`app_base`) para el redirect después del login y el `Path` de las
+  cookies; no hace falta otra variable.
+- **Spotify y http.** Spotify solo acepta redirect URIs http en una IP de loopback (`127.0.0.1`, no
+  `localhost`). Entrar desde otra máquina necesita https; por eso existe el prefijo.
+- **nginx del frontend.** Reenvía `Host $http_host` (con puerto): con `$host` el chequeo de mismo origen
+  rechazaba toda escritura en `http://<ip>:5173`. Toma la IP real de `X-Forwarded-For` cuando el par es
+  privado, y la pasa en `X-Real-IP`.
+- **Rate limit por cliente.** `ClientIpKeyExtractor` usa `X-Real-IP` si el par es privado o loopback; si no,
+  detrás de nginx todo el grupo compartía un balde de 4 req/s y una pestaña ya consume ~1,6.
+- **Build de Rust con caché.** Registro y `target` en cache mounts; antes de compilar se tocan `src/` y
+  `migrations/` porque Cargo decide por mtime y un `target` cacheado puede parecer más nuevo que el código
+  copiado (pasó: la imagen salió con el binario viejo).
+
 ## Archivos a modificar
 
 | Archivo | Cambio |

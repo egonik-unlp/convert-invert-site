@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
     const api_key = b.option(
         []const u8,
         "api-key",
-        "If set, inject this X-API-Key on proxied /api requests (the UI bundle already carries VITE_API_KEY from .env)",
+        "If set, inject this X-API-Key on every proxied /api request. This bypasses the Spotify login: anyone using the served UI acts as the service token",
     ) orelse "";
     const sync_playlist = b.option([]const u8, "playlist", "Spotify playlist URL or ID to sync (for `zig build sync`)") orelse "";
     const sync_workers = b.option(u16, "workers", "Workers for `zig build sync` (default 1)") orelse 1;
@@ -55,10 +55,10 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    // Build the frontend bundle, baking VITE_API_KEY from .env so the served app authenticates.
+    // Build the frontend bundle. It carries no key: people log in with Spotify and the browser
+    // authenticates with a session cookie.
     const build_ui = b.addSystemCommand(&.{
-        "bash", "-c",
-        "set -a; [ -f .env ] && . ./.env; set +a; VITE_API_KEY=\"${API_KEY:-}\" npm --prefix convert-invert-frontend run build",
+        "npm", "--prefix", "convert-invert-frontend", "run", "build",
     });
 
     // Bring up the WHOLE stack, including the `frontend` container — the dashboard on :5173 is
@@ -96,7 +96,7 @@ pub fn build(b: *std.Build) void {
 
     // Kept as an optional standalone bundle build (e.g. for a custom static host); not part of
     // `serve`, which uses the docker `frontend` container.
-    const ui_step = b.step("ui", "Build the frontend bundle (bakes VITE_API_KEY from .env)");
+    const ui_step = b.step("ui", "Build the frontend bundle");
     ui_step.dependOn(&build_ui.step);
 
     const up_step = b.step("up", "Start the full docker stack (db, redis, jaeger, slsk, api, frontend)");

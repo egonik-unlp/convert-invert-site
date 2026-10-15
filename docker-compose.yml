@@ -49,8 +49,9 @@ services:
       # Service token for scripts only; the browser authenticates with a session cookie.
       API_KEY: ${API_KEY:?API_KEY is required — generate with `openssl rand -hex 32`}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
-      # Login with Spotify.
-      SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI:-http://localhost:5173/api/auth/callback}
+      # Login with Spotify. Spotify only accepts plain-http redirect URIs on a loopback IP
+      # (127.0.0.1, not "localhost"); anything else needs https.
+      SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI:-http://127.0.0.1:5173/api/auth/callback}
       TOKEN_ENC_KEY: ${TOKEN_ENC_KEY:?TOKEN_ENC_KEY is required — generate with `openssl rand -base64 32`}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}

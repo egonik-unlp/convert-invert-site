@@ -17,6 +17,7 @@ fi
 GRAPH_TS=$(stat -c %Y "$GRAPH" 2>/dev/null || stat -f %m "$GRAPH")
 cd "$PROJECT_ROOT"
 LAST_SRC_COMMIT_TS=$(git log -1 --format=%ct -- 'src/' 2>/dev/null || echo 0)
+LAST_SRC_COMMIT_TS=${LAST_SRC_COMMIT_TS:-0}   # empty when the package has no src/
 
 if [ "$LAST_SRC_COMMIT_TS" -gt "$GRAPH_TS" ]; then
   DELTA=$(( (LAST_SRC_COMMIT_TS - GRAPH_TS) / 3600 ))

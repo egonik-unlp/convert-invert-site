@@ -19,6 +19,10 @@ POSTGRES_DB=convert_invert
 DATABASE_URL=postgresql://postgres:\${POSTGRES_PASSWORD}@db:5432/convert_invert
 API_KEY=$(openssl rand -hex 32)
 ALLOWED_ORIGINS=http://localhost:5173
+TOKEN_ENC_KEY=$(openssl rand -base64 32)
+ADMIN_EMAILS=you@example.com
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:5173/api/auth/callback
+COOKIE_SECURE=false
 USER_NAME=your-soulseek-username
 USER_PASSWORD=your-soulseek-password
 CLIENT_ID=your-spotify-client-id
@@ -29,7 +33,10 @@ EOF
 docker compose up --build
 ```
 
-The API listens on `:3124`, the frontend on `:5173`, Jaeger UI on `:16686`.
+The API listens on `:3124`, the frontend on `:5173`, Jaeger UI on `:16686`. Register
+`SPOTIFY_REDIRECT_URI` as a Redirect URI in your Spotify app, then open
+http://127.0.0.1:5173 (not `localhost`: Spotify only allows plain-http redirects on a
+loopback IP) and log in with an `ADMIN_EMAILS` account.
 
 ## Server deployment (auto-start on boot)
 
@@ -84,13 +91,13 @@ zig build ui
 docker compose up -d api db redis jaeger
 # 3. Serve on 0.0.0.0:8080 and proxy /api -> 127.0.0.1:3124
 zig build serve
-#    Options: -Dport=9000  -Dbackend-port=3124  -Dapi-key=<API_KEY>
+#    Options: -Dport=9000  -Dbackend-port=3124
 ```
 
 Then browse from another PC at `http://<this-machine-LAN-IP>:8080` (find the IP with
-`hostname -I`; open the port in your firewall). Passing `-Dapi-key=$API_KEY` makes the
-launcher inject `X-API-Key` server-side, so the secret never needs to be baked into the
-browser bundle. This is an alternative to the full compose frontend container — useful when
+`hostname -I`; open the port in your firewall). Don't pass `-Dapi-key`: it injects the
+service token into every proxied request, so anyone using that UI skips the Spotify login
+and acts as the service token. This is an alternative to the full compose frontend container — useful when
 you only run the API and want a lightweight LAN server for the UI.
 
 Start a Spotify sync from the CLI (backend must be up):
@@ -108,33 +115,59 @@ playlist (e.g. `/srv/storage/downloads/My Chill Mix/…`); the engine still shar
 
 ## Authentication
 
-All `/api/*` endpoints require an `X-API-Key` header. The value must match the
-backend's `API_KEY` env var. The frontend reads its key from `VITE_API_KEY` at
-build time and attaches it to every request.
+People log in with Spotify. Only emails an admin has invited (System → People) and
+those in `ADMIN_EMAILS` get in; the session is an HttpOnly cookie, and each person's
+Spotify tokens are stored encrypted with `TOKEN_ENC_KEY` (lose it and everyone just
+logs in again). Writes from a session must come from the app's own origin or one in
+`ALLOWED_ORIGINS`.
+
+`API_KEY` is a service token for scripts and is never sent to the browser:
 
 ```bash
 curl -H "X-API-Key: $API_KEY" http://localhost:3124/api/stats
 ```
 
-Requests without the header return `401 Unauthorized`. Requests with a wrong key
-also return `401` (comparison is constant-time).
+Requests without a session or key return `401 Unauthorized` (key comparison is
+constant-time).
+
+### Access from other machines (HTTPS)
+
+Spotify accepts plain-http redirect URIs only on a loopback IP, so logging in from
+another machine needs HTTPS in front of the frontend. The frontend works at the root
+or under a path prefix (it uses relative URLs), and the API reads the prefix off
+`SPOTIFY_REDIRECT_URI`, so mounting it at e.g. `https://host.example/convert/` only
+takes:
+
+```env
+SPOTIFY_REDIRECT_URI=https://host.example/convert/api/auth/callback
+COOKIE_SECURE=true
+```
+
+and a proxy that strips the prefix (Caddy: `handle_path /convert/* { reverse_proxy
+localhost:5173 }`, plus a redirect from `/convert` to `/convert/`). Register the same
+URL in the Spotify dashboard.
 
 ## Rate limiting
 
-`/api/*` is capped at 30 requests/minute per IP. `/api/workers/start` has a
-stricter cap of 5 requests/minute. Exceeding either returns `429 Too Many Requests`.
+`/api/*` allows 4 requests/second per client (burst 60); `/api/workers/start` is
+capped at 5 requests/minute. Exceeding either returns `429 Too Many Requests`.
+Behind the frontend's nginx (or another proxy on a private address) the client is
+taken from the forwarded address, so people don't share one bucket.
 
 ## Required environment variables
 
 | Variable | Where | Description |
 |---|---|---|
 | `DATABASE_URL` | backend | Postgres connection string |
-| `API_KEY` | backend + frontend build | Shared secret for `X-API-Key` |
-| `ALLOWED_ORIGINS` | backend | Comma-separated CORS allow-list |
+| `API_KEY` | backend | Service token for scripts (`X-API-Key`) |
+| `ALLOWED_ORIGINS` | backend | Extra origins allowed to call the API (CORS and writes) |
+| `TOKEN_ENC_KEY` | backend | Encrypts stored Spotify tokens (`openssl rand -base64 32`) |
+| `SPOTIFY_REDIRECT_URI` | backend | Public login callback URL; also sets the app's path prefix |
+| `ADMIN_EMAILS` | backend | Comma-separated emails that are admins on login |
+| `COOKIE_SECURE` | backend | `false` only for plain-http use; default `true` |
 | `USER_NAME` / `USER_PASSWORD` | backend | Soulseek credentials |
 | `CLIENT_ID` / `CLIENT_SECRET` | backend | Spotify app credentials |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | compose | Postgres bootstrap |
-| `VITE_API_KEY` | frontend | Same value as backend `API_KEY` |
 | `VITE_API_BASE_URL` | frontend | Backend base URL (omit if same-origin) |
 
 See `convert-invert/.env.example` and `convert-invert-frontend/.env.example`

@@ -57,3 +57,6 @@ downloads/
 
 .antigravitycli/
 analyzed-logs.txt
+
+# Graphify output, rebuilt locally by the post-commit hook
+graphify-out/
