@@ -111,6 +111,12 @@ App
   ya vio en Spotify (`trackmeta:*`), y solo se piden a Spotify, de a poco, las que nunca vio. El explorador de
   carpetas queda en Sistema → Archivos para admins. Las filas de cualquier colección y el panel de juicio
   también tienen "Bajar archivo".
+- **Reproductor.** Las canciones descargadas se escuchan en la app: botón de play sobre la tapa (en
+  Descargadas y en las filas de cualquier colección) y en el panel de la canción. La cola es lo descargado de
+  la lista en pantalla desde la canción elegida. Una barra abajo (tapa, título, anterior/pausa/siguiente,
+  posición, volumen) y Media Session para la pantalla bloqueada y las teclas multimedia. Usa el mismo
+  `GET /tracks/by-spotify/{id}/file` con `?inline=1` (con rangos, así se puede adelantar). El contexto del
+  tiempo está separado para que su actualización no re-renderice las filas.
 - **Veredictos abren el panel.** El feed de `/api/judgements` suma `spotifyId` (de `search_items.track_id`).
 - **"Usar igual" muestra quién.** El juicio manual guarda `{"acceptedBy", "by"}` en `raw`; el panel muestra
   "Elegido a mano por {by}".
