@@ -92,8 +92,15 @@ App
   caché de 10 min) y devuelve las canciones con su estado, así el resultado muestra qué ya está descargado.
 - **`.zip` de la colección = su carpeta.** La respuesta de colección trae `folder` (misma regla que
   `POST /requests`: nombre saneado, o `Liked Songs - {nombre}`) y `folderExists`. Si la carpeta no existe el
-  botón queda deshabilitado. Las canciones que se bajaron desde otra colección están en otra carpeta y no
-  entran en el .zip; armar un zip por canciones queda para otro change.
+  botón queda deshabilitado. (Reemplazado por el espejado, más abajo.)
+- **Espejado entre colecciones.** Una canción ya descargada bajo otra colección (de otra persona, otro
+  álbum) se enlaza con hard link en la carpeta de cada colección que la contiene (symlink relativo si no
+  se puede): no ocupa espacio y el .zip, el explorador y Soulseek la ven como archivo normal.
+  `downloaded_file.local_path` guarda dónde quedó cada archivo; las filas viejas se completan buscando el
+  nombre remoto en el árbol, solo si es único. Se espeja al pedir la colección (aunque no falte nada), al
+  abrirla o pollearla si su carpeta ya existe, y antes de bajar su .zip (`POST
+  /collections/{kind}/{id}/folder`). Así el .zip queda completo y el botón se habilita apenas hay algo
+  descargado, aunque la carpeta todavía no exista.
 - **Veredictos abren el panel.** El feed de `/api/judgements` suma `spotifyId` (de `search_items.track_id`).
 - **"Usar igual" muestra quién.** El juicio manual guarda `{"acceptedBy", "by"}` en `raw`; el panel muestra
   "Elegido a mano por {by}".
