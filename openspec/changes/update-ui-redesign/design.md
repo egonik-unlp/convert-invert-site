@@ -101,6 +101,16 @@ App
   abrirla o pollearla si su carpeta ya existe, y antes de bajar su .zip (`POST
   /collections/{kind}/{id}/folder`). Así el .zip queda completo y el botón se habilita apenas hay algo
   descargado, aunque la carpeta todavía no exista.
+- **"Descargadas" reemplaza a Archivos.** Todo lo que está en disco, para cualquiera, sin depender de poder
+  abrir la playlist de origen en Spotify (la de otra persona puede ser privada). Pestaña Canciones: lista con
+  tapa, artista, álbum, formato y tamaño, quién la pidió y cuándo llegó, búsqueda por palabras y orden
+  (recientes, artista, álbum, título), y bajar cada archivo (`GET /tracks/by-spotify/{id}/file`). Pestaña
+  Colecciones: tarjetas con mosaico de tapas por playlist/álbum, armadas con la colección de origen de cada
+  canción, los pedidos y las listas de canciones que el servidor ya leyó (así una canción aparece en cada
+  colección que la tiene); cada una abre su lista con su .zip. Tapas y duraciones salen de lo que el servidor
+  ya vio en Spotify (`trackmeta:*`), y solo se piden a Spotify, de a poco, las que nunca vio. El explorador de
+  carpetas queda en Sistema → Archivos para admins. Las filas de cualquier colección y el panel de juicio
+  también tienen "Bajar archivo".
 - **Veredictos abren el panel.** El feed de `/api/judgements` suma `spotifyId` (de `search_items.track_id`).
 - **"Usar igual" muestra quién.** El juicio manual guarda `{"acceptedBy", "by"}` en `raw`; el panel muestra
   "Elegido a mano por {by}".
